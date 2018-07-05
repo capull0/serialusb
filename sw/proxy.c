@@ -4,8 +4,7 @@
  */
 
 #include <gimxusb/include/gusb.h>
-#include <protocol.h>
-#include <adapter.h>
+#include <gimxadapter/include/gadapter.h>
 #include <allocator.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,16 +39,16 @@ GLOG_INST(proxy)
 #define PRINT_TRANSFER_READ_ERROR(ENDPOINT,MESSAGE) fprintf(stderr, "%s:%d %s: read transfer failed on endpoint %hhu with error: %s\n", __FILE__, __LINE__, __func__, ENDPOINT & USB_ENDPOINT_NUMBER_MASK, MESSAGE);
 
 static struct gusb_device * usb = NULL;
-static struct adapter_device * adapter= NULL;
+static struct gadapter_device * adapter= NULL;
 static struct gtimer * init_timer = NULL;
 
 static s_usb_descriptors descriptors;
-static unsigned char desc[MAX_DESCRIPTORS_SIZE] = {};
+static unsigned char desc[GA_MAX_DESCRIPTORS_SIZE] = {};
 static unsigned char * pDesc = desc;
-static s_descriptorIndex descIndex[MAX_DESCRIPTORS] = {};
-static s_descriptorIndex * pDescIndex = descIndex;
-static s_endpointConfig endpoints[MAX_ENDPOINTS] = {};
-static s_endpointConfig * pEndpoints = endpoints;
+static s_ga_descriptorIndex descIndex[GA_MAX_DESCRIPTORS] = {};
+static s_ga_descriptorIndex * pDescIndex = descIndex;
+static s_ga_endpointConfig endpoints[GA_MAX_ENDPOINTS] = {};
+static s_ga_endpointConfig * pEndpoints = endpoints;
 
 static uint8_t descIndexSent = 0;
 static uint8_t endpointsSent = 0;
@@ -60,10 +59,10 @@ static s_endpoint_map endpointMap = { {}, {}, {} };
 
 static struct {
   uint16_t length;
-  s_endpointPacket packet;
+  s_ga_endpointPacket packet;
 } inPackets[ENDPOINT_MAX_NUMBER] = {};
 
-static uint8_t inEpFifo[MAX_ENDPOINTS] = {};
+static uint8_t inEpFifo[GA_MAX_ENDPOINTS] = {};
 static uint8_t nbInEpFifo = 0;
 
 static volatile int done;
@@ -92,7 +91,7 @@ static int send_next_in_packet() {
 
   if (nbInEpFifo > 0) {
     uint8_t inPacketIndex = ALLOCATOR_ENDPOINT_ADDR_TO_INDEX(inEpFifo[0]);
-    int ret = adapter_send(adapter, E_TYPE_IN, (const void *)&inPackets[inPacketIndex].packet, inPackets[inPacketIndex].length);
+    int ret = gadapter_send(adapter, E_TYPE_IN, (const void *)&inPackets[inPacketIndex].packet, inPackets[inPacketIndex].length);
     if(ret < 0) {
       return -1;
     }
@@ -150,11 +149,11 @@ int usb_read_callback(void * user __attribute__((unused)), unsigned char endpoin
           done = 1;
           return -1;
         }
-        ret = adapter_send(adapter, E_TYPE_CONTROL, buf, status);
+        ret = gadapter_send(adapter, E_TYPE_CONTROL, buf, status);
       }
     } else {
       if (adapter != NULL) {
-        ret = adapter_send(adapter, E_TYPE_CONTROL_STALL, NULL, 0);
+        ret = gadapter_send(adapter, E_TYPE_CONTROL_STALL, NULL, 0);
       }
     }
     if(ret < 0) {
@@ -163,7 +162,7 @@ int usb_read_callback(void * user __attribute__((unused)), unsigned char endpoin
   } else {
     if (status >= 0) {
       if (adapter != NULL) {
-        if (status > MAX_PAYLOAD_SIZE_EP) {
+        if (status > GA_MAX_PAYLOAD_SIZE_EP) {
           PRINT_ERROR_OTHER("too many bytes transfered")
           done = 1;
           return -1;
@@ -208,7 +207,7 @@ int source_write_callback(void * user __attribute__((unused)), unsigned char end
   case E_TRANSFER_STALL:
     if (endpoint == 0) {
       if (adapter != NULL) {
-        int ret = adapter_send(adapter, E_TYPE_CONTROL_STALL, NULL, 0);
+        int ret = gadapter_send(adapter, E_TYPE_CONTROL_STALL, NULL, 0);
         if (ret < 0) {
           done = 1;
           return -1;
@@ -222,7 +221,7 @@ int source_write_callback(void * user __attribute__((unused)), unsigned char end
   default:
     if (endpoint == 0) {
       if (adapter != NULL) {
-        int ret = adapter_send(adapter, E_TYPE_CONTROL, NULL, 0);
+        int ret = gadapter_send(adapter, E_TYPE_CONTROL, NULL, 0);
         if (ret < 0) {
           done = 1;
           return -1;
@@ -408,9 +407,9 @@ static int fix_configuration(unsigned char configurationIndex) {
 
 static int add_descriptor(uint16_t wValue, uint16_t wIndex, uint16_t wLength, void * data) {
 
-  if (pDesc + wLength > desc + MAX_DESCRIPTORS_SIZE || pDescIndex >= descIndex + MAX_DESCRIPTORS) {
+  if (pDesc + wLength > desc + GA_MAX_DESCRIPTORS_SIZE || pDescIndex >= descIndex + GA_MAX_DESCRIPTORS) {
     fprintf(stderr, "%s:%d %s: unable to add descriptor wValue=0x%04x wIndex=0x%04x wLength=%u (available=%u)\n",
-        __FILE__, __LINE__, __func__, wValue, wIndex, wLength, (unsigned int)(MAX_DESCRIPTORS_SIZE - (pDesc - desc)));
+        __FILE__, __LINE__, __func__, wValue, wIndex, wLength, (unsigned int)(GA_MAX_DESCRIPTORS_SIZE - (pDesc - desc)));
     return -1;
   }
 
@@ -456,7 +455,7 @@ int send_descriptors() {
     }
   }
 
-  ret = adapter_send(adapter, E_TYPE_DESCRIPTORS, desc, pDesc - desc);
+  ret = gadapter_send(adapter, E_TYPE_DESCRIPTORS, desc, pDesc - desc);
   if (ret < 0) {
     return -1;
   }
@@ -472,7 +471,7 @@ static int send_index() {
 
   descIndexSent = 1;
 
-  return adapter_send(adapter, E_TYPE_INDEX, (unsigned char *)&descIndex, (pDescIndex - descIndex) * sizeof(*descIndex));
+  return gadapter_send(adapter, E_TYPE_INDEX, (unsigned char *)&descIndex, (pDescIndex - descIndex) * sizeof(*descIndex));
 }
 
 static int send_endpoints() {
@@ -483,7 +482,7 @@ static int send_endpoints() {
 
   endpointsSent = 1;
 
-  return adapter_send(adapter, E_TYPE_ENDPOINTS, (unsigned char *)&endpoints, (pEndpoints - endpoints) * sizeof(*endpoints));
+  return gadapter_send(adapter, E_TYPE_ENDPOINTS, (unsigned char *)&endpoints, (pEndpoints - endpoints) * sizeof(*endpoints));
 }
 
 static int source_send_out_transfer(unsigned char endpoint, const void * buf, unsigned int length) {
@@ -524,7 +523,7 @@ static void dump(unsigned char * data, unsigned char length)
   printf("\n");
 }
 
-static int process_packet(void * user __attribute__((unused)), s_packet * packet)
+static int process_packet(void * user __attribute__((unused)), s_ga_packet * packet)
 {
   unsigned char type = packet->header.type;
 
@@ -554,7 +553,7 @@ static int process_packet(void * user __attribute__((unused)), s_packet * packet
     break;
   case E_TYPE_OUT:
     {
-      s_endpointPacket * epPacket = (s_endpointPacket *)packet->value;
+      s_ga_endpointPacket * epPacket = (s_ga_endpointPacket *)packet->value;
       ret = source_send_out_transfer(epPacket->endpoint, epPacket->data, packet->header.length - 1);
     }
     break;
@@ -680,7 +679,7 @@ int proxy_start(const char * port) {
         return -1;
       }
 
-      ADAPTER_CALLBACKS callbacks = {
+      GADAPTER_CALLBACKS callbacks = {
               .fp_read = process_packet,
               .fp_write = adapter_send_callback,
               .fp_close = adapter_close_callback,
@@ -688,7 +687,7 @@ int proxy_start(const char * port) {
               .fp_remove = REMOVE_FUNCTION
       };
 
-      adapter = adapter_open(port, &callbacks);
+      adapter = gadapter_open(port, GA_USART_BAUDRATE, &callbacks);
 
       if(adapter == NULL) {
         return -1;
@@ -740,9 +739,9 @@ int proxy_start(const char * port) {
   gtimer_close(timer);
 
   if (adapter != NULL) {
-      adapter_send(adapter, E_TYPE_RESET, NULL, 0);
+      gadapter_send(adapter, E_TYPE_RESET, NULL, 0);
       usleep(10000); // leave time for the reset packet to be sent
-      adapter_close(adapter);
+      gadapter_close(adapter);
   }
 
   gusb_close(usb);

@@ -3,7 +3,7 @@
  License: GPLv3
  */
 
-#include <adapter.h>
+#include <gadapter.h>
 #include <gimxserial/include/gserial.h>
 #include <gimxpoll/include/gpoll.h>
 #include <string.h>
@@ -13,25 +13,23 @@
 #include <gimxlog/include/glog.h>
 #include <stdlib.h>
 
-GLOG_GET(GLOG_NAME)
+GLOG_INST(GLOG_NAME)
 
-#define USART_BAUDRATE 500000
-
-struct adapter_device {
-  s_packet packet;
+struct gadapter_device {
+  s_ga_packet packet;
   unsigned int bread;
   struct gserial_device * serial;
-  ADAPTER_READ_CALLBACK read_callback;
-  ADAPTER_WRITE_CALLBACK write_callback;
-  ADAPTER_CLOSE_CALLBACK close_callback;
-  GLIST_LINK(struct adapter_device)
+  GADAPTER_READ_CALLBACK read_callback;
+  GADAPTER_WRITE_CALLBACK write_callback;
+  GADAPTER_CLOSE_CALLBACK close_callback;
+  GLIST_LINK(struct gadapter_device)
 };
 
-GLIST_INST(struct adapter_device, adapter_devices, adapter_close)
+GLIST_INST(struct gadapter_device, adapter_devices, gadapter_close)
 
 static int adapter_recv(void * user, const void * buf, int status) {
 
-  struct adapter_device * device = (struct adapter_device *) user;
+  struct gadapter_device * device = (struct gadapter_device *) user;
 
   if (status < 0) {
     return -1;
@@ -39,23 +37,23 @@ static int adapter_recv(void * user, const void * buf, int status) {
 
   int ret = 0;
 
-  if(device->bread + status <= sizeof(s_packet)) {
+  if(device->bread + status <= sizeof(s_ga_packet)) {
     memcpy((unsigned char *)&device->packet + device->bread, buf, status);
     device->bread += status;
     unsigned int remaining;
-    if(device->bread < sizeof(s_header))
+    if(device->bread < sizeof(s_ga_header))
     {
-      remaining = sizeof(s_header) - device->bread;
+      remaining = sizeof(s_ga_header) - device->bread;
     }
     else
     {
-      remaining = device->packet.header.length - (device->bread - sizeof(s_header));
+      remaining = device->packet.header.length - (device->bread - sizeof(s_ga_header));
     }
     if(remaining == 0)
     {
       ret = device->read_callback(device, &device->packet);
       device->bread = 0;
-      gserial_set_read_size(device->serial, sizeof(s_header));
+      gserial_set_read_size(device->serial, sizeof(s_ga_header));
     }
     else
     {
@@ -65,16 +63,19 @@ static int adapter_recv(void * user, const void * buf, int status) {
   else
   {
     // this is a critical error (no possible recovering)
-    fprintf(stderr, "%s:%d %s: invalid data size (count=%u, available=%zu)\n", __FILE__, __LINE__, __func__, status, sizeof(s_packet) - device->bread);
+    if (GLOG_LEVEL(GLOG_NAME,ERROR))
+    {
+      fprintf(stderr, "%s:%d %s: invalid data size (count=%u, available=%zu)\n", __FILE__, __LINE__, __func__, status, sizeof(s_ga_packet) - device->bread);
+    }
     return -1;
   }
 
   return ret;
 }
 
-int adapter_send(void * user, unsigned char type, const unsigned char * data, unsigned int count) {
+int gadapter_send(void * user, unsigned char type, const unsigned char * data, unsigned int count) {
 
-  struct adapter_device * device = (struct adapter_device *) user;
+  struct gadapter_device * device = (struct gadapter_device *) user;
 
   if (count != 0 && data == NULL) {
     PRINT_ERROR_OTHER("data is NULL")
@@ -88,7 +89,7 @@ int adapter_send(void * user, unsigned char type, const unsigned char * data, un
 
       length = count;
     }
-    s_packet packet = { .header = { .type = type, .length = length } };
+    s_ga_packet packet = { .header = { .type = type, .length = length } };
     if (data) {
       memcpy(packet.value, data, length);
     }
@@ -104,7 +105,7 @@ int adapter_send(void * user, unsigned char type, const unsigned char * data, un
   return 0;
 }
 
-struct adapter_device * adapter_open(const char * port, const ADAPTER_CALLBACKS * callbacks) {
+struct gadapter_device * gadapter_open(const char * port, unsigned int baudrate, const GADAPTER_CALLBACKS * callbacks) {
 
   if (callbacks->fp_register == NULL) {
     PRINT_ERROR_OTHER("fp_register is NULL")
@@ -118,13 +119,13 @@ struct adapter_device * adapter_open(const char * port, const ADAPTER_CALLBACKS 
 
   gserial_init();
 
-  struct gserial_device * serial = gserial_open(port, USART_BAUDRATE);
+  struct gserial_device * serial = gserial_open(port, baudrate);
   if (serial == NULL) {
     gserial_exit();
     return NULL;
   }
 
-  struct adapter_device * device = calloc(1, sizeof(*device));
+  struct gadapter_device * device = calloc(1, sizeof(*device));
   if (device == NULL) {
     PRINT_ERROR_ALLOC_FAILED("calloc")
     gserial_close(serial);
@@ -135,7 +136,7 @@ struct adapter_device * adapter_open(const char * port, const ADAPTER_CALLBACKS 
   GSERIAL_CALLBACKS serial_callbacks = {
     .fp_read = adapter_recv,
     .fp_write = callbacks->fp_write,
-    .fp_close = adapter_close,
+    .fp_close = gadapter_close,
     .fp_register = callbacks->fp_register,
     .fp_remove = callbacks->fp_remove
   };
@@ -157,9 +158,9 @@ struct adapter_device * adapter_open(const char * port, const ADAPTER_CALLBACKS 
   return device;
 }
 
-int adapter_close(void * user) {
+int gadapter_close(void * user) {
 
-  struct adapter_device * device = (struct adapter_device *) user;
+  struct gadapter_device * device = (struct gadapter_device *) user;
 
   gserial_close(device->serial);
 
