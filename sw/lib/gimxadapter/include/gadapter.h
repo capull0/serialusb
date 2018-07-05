@@ -50,13 +50,13 @@ typedef struct GA_PACKED {
 } s_ga_endpointPacket; // should not exceed 255 bytes
 
 typedef enum {
-  E_TYPE_DESCRIPTORS,
-  E_TYPE_INDEX,
-  E_TYPE_ENDPOINTS,
-  E_TYPE_RESET,
-  E_TYPE_CONTROL,
-  E_TYPE_CONTROL_STALL,
-  E_TYPE_IN,
+  GA_TYPE_DESCRIPTORS,
+  GA_TYPE_INDEX,
+  GA_TYPE_ENDPOINTS,
+  GA_TYPE_RESET,
+  GA_TYPE_CONTROL,
+  GA_TYPE_CONTROL_STALL,
+  GA_TYPE_IN,
   E_TYPE_OUT,
   E_TYPE_DEBUG,
 } e_ga_packetType;
