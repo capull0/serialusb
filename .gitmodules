@@ -19,3 +19,9 @@
 [submodule "sw/lib/gimxusb"]
 	path = sw/lib/gimxusb
 	url = https://github.com/matlo/gimxusb.git
+[submodule "sw/lib/--force"]
+	path = sw/lib/--force
+	url = https://github.com/matlo/gimxadapter.git
+[submodule "sw/lib/gimxadapter"]
+	path = sw/lib/gimxadapter
+	url = https://github.com/matlo/gimxadapter.git
