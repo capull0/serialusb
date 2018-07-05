@@ -57,8 +57,8 @@ typedef enum {
   GA_TYPE_CONTROL,
   GA_TYPE_CONTROL_STALL,
   GA_TYPE_IN,
-  E_TYPE_OUT,
-  E_TYPE_DEBUG,
+  GA_TYPE_OUT,
+  GA_TYPE_DEBUG,
 } e_ga_packetType;
 
 // this is the max serial packet size
