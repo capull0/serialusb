@@ -687,7 +687,7 @@ int proxy_start(const char * port) {
               .fp_remove = REMOVE_FUNCTION
       };
 
-      adapter = gadapter_open(port, GA_USART_BAUDRATE, &callbacks);
+      adapter = gadapter_open(port, GA_USART_BAUDRATE, NULL, &callbacks);
 
       if(adapter == NULL) {
         return -1;
