@@ -18,6 +18,8 @@
 #include <stddef.h>
 #include <gimxlog/include/glog.h>
 
+#include <Python.h>
+
 GLOG_INST(proxy)
 
 #ifdef WIN32
@@ -37,6 +39,8 @@ GLOG_INST(proxy)
 #define PRINT_ERROR_OTHER(MESSAGE) fprintf(stderr, "%s:%d %s: %s\n", __FILE__, __LINE__, __func__, MESSAGE);
 #define PRINT_TRANSFER_WRITE_ERROR(ENDPOINT,MESSAGE) fprintf(stderr, "%s:%d %s: write transfer failed on endpoint %hhu with error: %s\n", __FILE__, __LINE__, __func__, ENDPOINT & USB_ENDPOINT_NUMBER_MASK, MESSAGE);
 #define PRINT_TRANSFER_READ_ERROR(ENDPOINT,MESSAGE) fprintf(stderr, "%s:%d %s: read transfer failed on endpoint %hhu with error: %s\n", __FILE__, __LINE__, __func__, ENDPOINT & USB_ENDPOINT_NUMBER_MASK, MESSAGE);
+
+void dump(unsigned char * data, unsigned char length);
 
 static struct gusb_device * usb = NULL;
 static struct gadapter_device * adapter= NULL;
@@ -66,6 +70,8 @@ static uint8_t inEpFifo[GA_MAX_ENDPOINTS] = {};
 static uint8_t nbInEpFifo = 0;
 
 static volatile int done;
+
+PyObject *pName, *pModule, *pFuncSend, *pFuncRecv;
 
 /*
  * the atmega32u4 supports up to 6 non-control endpoints
@@ -110,9 +116,16 @@ static int queue_in_packet(unsigned char endpoint, const void * buf, int transfe
     return -1;
   }
 
+  PyObject * pValue = Py_BuildValue("(s#)", buf, transfered);
+  PyErr_Print();
+  PyObject * pResult = PyObject_CallObject(pFuncSend, pValue);
+  PyErr_Print();
+  char * out = PyString_AsString(pResult);
+  PyErr_Print();
+
   uint8_t inPacketIndex = ALLOCATOR_ENDPOINT_ADDR_TO_INDEX(endpoint);
   inPackets[inPacketIndex].packet.endpoint = ALLOCATOR_S2T_ENDPOINT(&endpointMap, endpoint);
-  memcpy(inPackets[inPacketIndex].packet.data, buf, transfered);
+  memcpy(inPackets[inPacketIndex].packet.data, out, transfered);
   inPackets[inPacketIndex].length = transfered + 1;
   inEpFifo[nbInEpFifo] = endpoint;
   ++nbInEpFifo;
@@ -508,10 +521,17 @@ static int source_send_control_transfer(struct usb_ctrlrequest * setup, unsigned
     }
   }
 
-  return gusb_write(usb, 0, setup, length);
+  PyObject * pValue = Py_BuildValue("(s#)", (unsigned char*)setup, length);
+  PyErr_Print();
+  PyObject * pResult = PyObject_CallObject(pFuncRecv, pValue);
+  PyErr_Print();
+  char * out = PyString_AsString(pResult);
+  PyErr_Print();
+
+  return gusb_write(usb, 0, (struct usb_ctrlrequest *)out, length);
 }
 
-static void dump(unsigned char * data, unsigned char length)
+void dump(unsigned char * data, unsigned char length)
 {
   int i;
   for (i = 0; i < length; ++i) {
@@ -652,12 +672,63 @@ static int timer_read(void * user __attribute__((unused))) {
   return 1;
 }
 
-int proxy_start(const char * port) {
+static int plugin_init(const char *plugin_path, const char *plugin) {
+
+  PyObject *pDict;
+
+  setenv("PYTHONPATH", plugin_path, 1);
+
+  Py_Initialize();
+  pName = PyString_FromString(plugin);
+
+  pModule = PyImport_Import(pName);
+
+  if (pModule != NULL) {
+    pDict = PyModule_GetDict(pModule);
+
+    pFuncSend = PyDict_GetItemString(pDict, (char *)"send_data");
+    if (pFuncSend && PyCallable_Check(pFuncSend)) {
+    } else {
+      PRINT_ERROR_OTHER("cannot find function 'send_data'");
+      return -1;
+    }
+    pFuncRecv = PyDict_GetItemString(pDict, (char *)"receive_data");
+    if (pFuncRecv && PyCallable_Check(pFuncRecv)) {
+    } else {
+      PRINT_ERROR_OTHER("cannot find function 'receive_data'");
+      return -1;
+    }
+  } else {
+    PRINT_ERROR_OTHER("failed to load plugin");
+    return -1;
+  }
+
+  Py_DECREF(pName);
+
+  return 0;
+}
+
+
+int proxy_start(const char * port, const char * plugin_path, const char * plugin_name) {
 
   int ret = gprio();
   if (ret < 0)
   {
     PRINT_ERROR_OTHER("Failed to set process priority!")
+    return -1;
+  }
+
+  if (plugin_path == NULL) {
+    PRINT_ERROR_OTHER("specify plugin_path")
+    return -1;
+  }
+
+  if (plugin_name == NULL) {
+    PRINT_ERROR_OTHER("no plugin")
+    return -1;
+  }
+  if (plugin_init(plugin_path, plugin_name) < 0) {
+    PRINT_ERROR_OTHER("failed to init plugin")
     return -1;
   }
 

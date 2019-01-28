@@ -13,10 +13,12 @@
 
 static char * port = NULL;
 static char * device = NULL;
+static char * plugin = "default";
+static char * plugin_path = "plugins";
 
 static void usage()
 {
-  printf("Usage: sudo serialusb --port /dev/ttyUSB0 [--device <path>]\n");
+  printf("Usage: sudo serialusb --port /dev/ttyUSB0 [--dir <plugins directory>] [--device <path>]\n");
 }
 
 int args_read(int argc, char *argv[]) {
@@ -30,6 +32,8 @@ int args_read(int argc, char *argv[]) {
     { "version", no_argument,       0, 'v' },
     { "port",    required_argument, 0, 'p' },
     { "device",  required_argument, 0, 'd' },
+    { "plugin",  required_argument, 0, 'P' },
+    { "dir",     required_argument, 0, 'D' },
     { 0, 0, 0, 0 }
   };
 
@@ -37,7 +41,7 @@ int args_read(int argc, char *argv[]) {
     /* getopt_long stores the option index here. */
     int option_index = 0;
 
-    c = getopt_long(argc, argv, "hp:d:v", long_options, &option_index);
+    c = getopt_long(argc, argv, "hp:d:P:D:v", long_options, &option_index);
 
     /* Detect the end of the options. */
     if (c == -1)
@@ -56,6 +60,14 @@ int args_read(int argc, char *argv[]) {
 
     case 'd':
       device = optarg;
+      break;
+
+    case 'P':
+      plugin = optarg;
+      break;
+
+    case 'D':
+      plugin_path = optarg;
       break;
 
     case 'v':
@@ -97,7 +109,7 @@ int main(int argc, char * argv[]) {
   ret = proxy_init(device);
 
   if (ret == 0 && port != NULL) {
-    ret = proxy_start(port);
+    ret = proxy_start(port, plugin_path, plugin);
   }
 
   return ret;
