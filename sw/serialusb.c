@@ -12,10 +12,11 @@
 #include <getopt.h>
 
 static char * port = NULL;
+static char * device = NULL;
 
 static void usage()
 {
-  printf("Usage: sudo serialusb --port /dev/ttyUSB0\n");
+  printf("Usage: sudo serialusb --port /dev/ttyUSB0 [--device <path>]\n");
 }
 
 int args_read(int argc, char *argv[]) {
@@ -28,6 +29,7 @@ int args_read(int argc, char *argv[]) {
     { "help",    no_argument,       0, 'h' },
     { "version", no_argument,       0, 'v' },
     { "port",    required_argument, 0, 'p' },
+    { "device",  required_argument, 0, 'd' },
     { 0, 0, 0, 0 }
   };
 
@@ -35,7 +37,7 @@ int args_read(int argc, char *argv[]) {
     /* getopt_long stores the option index here. */
     int option_index = 0;
 
-    c = getopt_long(argc, argv, "hp:v", long_options, &option_index);
+    c = getopt_long(argc, argv, "hp:d:v", long_options, &option_index);
 
     /* Detect the end of the options. */
     if (c == -1)
@@ -50,6 +52,10 @@ int args_read(int argc, char *argv[]) {
 
     case 'p':
       port = optarg;
+      break;
+
+    case 'd':
+      device = optarg;
       break;
 
     case 'v':
@@ -88,7 +94,7 @@ int main(int argc, char * argv[]) {
     return -1;
   }
 
-  ret = proxy_init();
+  ret = proxy_init(device);
 
   if (ret == 0 && port != NULL) {
     ret = proxy_start(port);

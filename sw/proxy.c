@@ -591,11 +591,13 @@ static int process_packet(void * user __attribute__((unused)), s_ga_packet * pac
   return ret;
 }
 
-int proxy_init() {
+int proxy_init(const char * path) {
 
   gusb_init();
 
-  char * path = source_select();
+  if (path == NULL) {
+    path = source_select();
+  }
 
   if(path == NULL) {
     fprintf(stderr, "No USB device selected!\n");
@@ -605,19 +607,17 @@ int proxy_init() {
   usb = gusb_open_path(path);
 
   if (usb == NULL) {
-    free(path);
+    fprintf(stderr, "Can't open USB device!\n");
     return -1;
   }
 
   const s_usb_descriptors * desc = gusb_get_usb_descriptors(usb);
   if (desc == NULL) {
-    free(path);
+    fprintf(stderr, "Can't get USB descriptors!\n");
     return -1;
   }
 
   printf("Opened device: VID 0x%04x PID 0x%04x PATH %s\n", desc->device.idVendor, desc->device.idProduct, path);
-
-  free(path);
 
   if (desc->device.bNumConfigurations == 0) {
     PRINT_ERROR_OTHER("missing configuration")
