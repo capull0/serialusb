@@ -11,14 +11,14 @@
 #include <info.h>
 #include <getopt.h>
 
-static char * port = NULL;
+static char * port = "/dev/ttyS0";
 static char * device = NULL;
 static char * plugin = "default";
 static char * plugin_path = "plugins";
 
 static void usage()
 {
-  printf("Usage: sudo serialusb --port /dev/ttyUSB0 [--dir <plugins directory>] [--device <path>]\n");
+  printf("Usage: sudo serialusb [-p <serial device>] [-d <USB device path] [-D <plugins directory>] [-P <plugin>]\n");
 }
 
 int args_read(int argc, char *argv[]) {
